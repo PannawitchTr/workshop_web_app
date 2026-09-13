@@ -27,66 +27,102 @@ app.UseHttpsRedirection();
 
 var todoGroup = app.MapGroup("/api/todos").WithTags("Todos");
 
-var todos = new List<TodoGetDto>
+#region In-Memory Endpoint
+
+
+// var todos = new List<TodoGetDto>
+// {
+//     new(1, "Learn C#", true),
+//     new(2, "Learn ASP.NET Core", false),
+//     new(3, "Build a web API", false)
+// };
+
+//  todoGroup.MapGet("/", () =>Results.Ok(todos));
+
+// todoGroup.MapGet("/api/todos/{id}", (int id) =>
+// {
+//     var todo = todos.FirstOrDefault(t => t.Id == id);
+
+//     return todo is not null ? Results.Ok(todo) : Results.NotFound();
+// });
+
+// todoGroup.MapPost("/api/todos", (TodoPostDto dto) =>
+// {
+//     var nextId = todos.Count == 0 ? 1 : todos.Max(t => t.Id) + 1;
+
+//     var todo = new TodoGetDto(nextId, dto.Title, false);
+//     todos.Add(todo);
+
+//     return Results.Created($"/api/todos/{todo.Id}", todo);
+// });
+
+// todoGroup.MapPut("/api/todos/{id}", (int id, TodoPutDto dto) =>
+// {
+//     try
+//     {
+//         var index = todos.FindIndex(t => t.Id == id);
+//         if (index == -1) return Results.NotFound();
+
+//         todos[index] = todos[index] with
+//         {
+//             Title = dto.Title,
+//             IsCompleted = dto.IsCompleted
+//         };
+//         return Results.NoContent();
+//     }
+//     catch (Exception ex)
+//     {
+//         return Results.Problem(ex.Message);
+//     }
+// });
+
+// todoGroup.MapDelete("/api/todos/{id}", (int id) =>
+// {
+//     try
+//     {
+//         var todo = todos.FirstOrDefault(t => t.Id == id);
+//         if (todo is null) return Results.NotFound();
+
+//         todos.Remove(todo);
+//         return Results.NoContent();
+//     }
+//     catch (Exception ex)
+//     {
+//         return Results.Problem(ex.Message);
+//     }
+// });
+
+#endregion
+
+#region Database Endpoint
+
+todoGroup.MapGet("/", async (appDbContext) =>
 {
-    new(1, "Learn C#", true),
-    new(2, "Learn ASP.NET Core", false),
-    new(3, "Build a web API", false)
-};
+    var todos = await dbContext.Todos.ToListAsync();
 
- todoGroup.MapGet("/", () =>Results.Ok(todos));
-
-todoGroup.MapGet("/api/todos/{id}", (int id) =>
-{
-    var todo = todos.FirstOrDefault(t => t.Id == id);
-
-    return todo is not null ? Results.Ok(todo) : Results.NotFound();
+    return todos.Count == 0 ? Results.NotFound() :Results.Ok(todos);
 });
 
-todoGroup.MapPost("/api/todos", (TodoPostDto dto) =>
+todoGroup.MapPost("/", async (AppDbContext db, TodoPostDto dto) =>
 {
-    var nextId = todos.Count == 0 ? 1 : todos.Max(t => t.Id) + 1;
+    // read the last id from the database
+    var lastTodo = await db.Todos.OrderBydescending(t => t.Id).FirstOrDefaultAsync();
+    var nextId = LastTodo is null ? 1 : lastTodo.Id + 1;
 
-    var todo = new TodoGetDto(nextId, dto.Title, false);
-    todos.Add(todo);
+    var todo = new TodoItem
+    (
+        Id = nextId,
+        Title = dto.Title,
+        IsCompleted = false,
+        CreatedAt = DataTime.UtcNow
+    );
+    db.Todos.Add(todo);
+    await db.SavechangesAsync();
 
-    return Results.Created($"/api/todos/{todo.Id}", todo);
+    var todoGetDto = new TodoGetDto(todo.Id, todo.Title, todo.IsCompleted);
+
+    return Results.Created($"/{todo.Id}", todoGetDto);
 });
 
-todoGroup.MapPut("/api/todos/{id}", (int id, TodoPutDto dto) =>
-{
-    try
-    {
-        var index = todos.FindIndex(t => t.Id == id);
-        if (index == -1) return Results.NotFound();
-
-        todos[index] = todos[index] with
-        {
-            Title = dto.Title,
-            IsCompleted = dto.IsCompleted
-        };
-        return Results.NoContent();
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(ex.Message);
-    }
-});
-
-todoGroup.MapDelete("/api/todos/{id}", (int id) =>
-{
-    try
-    {
-        var todo = todos.FirstOrDefault(t => t.Id == id);
-        if (todo is null) return Results.NotFound();
-
-        todos.Remove(todo);
-        return Results.NoContent();
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(ex.Message);
-    }
-});
-
+#endregion
 app.Run();
