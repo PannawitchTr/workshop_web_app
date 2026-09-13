@@ -141,7 +141,8 @@ todoGroup.MapGet("/", async (AddDbContext db) =>
                                 t.Title, 
                                 t.IsCompleted));
     return todos.Count == 0 ? Results.NotFound(): Results.Ok(todoGetDtos);
-});
+})
+.RequireAuthorization();
 
 todoGroup.MapPost("/", async (AddDbContext db, TodoPostDto dto) =>
 {
