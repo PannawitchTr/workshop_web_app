@@ -1,5 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.IdentityModel.Tokens;
 using TodoApi.Data;
 using TodoApi.Dtos;
 using TodoApi.Dtos.Model;
@@ -15,6 +19,35 @@ builder.Services.AddDbContext<AddDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Admin", policy =>
+    {
+        policy.RequireClaim(ClaimTypes.Role, "Admin");
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -24,6 +57,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 var todoGroup = app.MapGroup("/api/todos").WithTags("Todos");
 
@@ -124,6 +159,41 @@ todoGroup.MapPost("/", async (AddDbContext db, TodoPostDto dto) =>
 
     return Results.Created($"/api/todos/{todo.Id}", todoGetDto);
 });
+
+#endregion
+
+#region Authentication Endpoint
+
+app.MapPost("/api/login", (LoginDto dto, IConfiguration config) =>
+{
+    if (dto.Username != "admin" || dto.Password != "password")
+        return Results.Unauthorized();
+
+    var claims = new[]
+    {
+        new Claim(ClaimTypes.Name, dto.Username),
+        new Claim(ClaimTypes.Role, "Admin")
+    };
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
+    var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var token = new JwtSecurityToken(
+        issuer: config["Jwt:Issuer"],
+        audience: config["Jwt:Audience"],
+        claims: claims,
+        expires: DateTime.UtcNow.AddDays(int.Parse(config["Jwt:ExpireDays"]!)),
+        signingCredentials: credentials
+    );
+
+    var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+    return Results.Ok(new LoginResponseDto(tokenString, token.ValidTo));
+})
+.WithTags("Authentication")
+.WithName("Login")
+.Produces<LoginResponseDto>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status401Unauthorized);
 
 #endregion
 
