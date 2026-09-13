@@ -4,6 +4,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
+
 using TodoApi.Data;
 using TodoApi.Dtos;
 using TodoApi.Dtos.Model;
@@ -54,6 +56,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
@@ -63,7 +66,6 @@ app.UseAuthorization();
 var todoGroup = app.MapGroup("/api/todos").WithTags("Todos");
 
 #region In-Memory Endpoint
-
 
 // var todos = new List<TodoGetDto>
 // {
