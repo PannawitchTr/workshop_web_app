@@ -96,33 +96,32 @@ var todoGroup = app.MapGroup("/api/todos").WithTags("Todos");
 
 #region Database Endpoint
 
-todoGroup.MapGet("/", async (appDbContext) =>
+todoGroup.MapGet("/", async (AddDbContext db) =>
 {
-    var todos = await dbContext.Todos.ToListAsync();
+    var todos = await db.Todos.ToListAsync();
 
-    return todos.Count == 0 ? Results.NotFound() :Results.Ok(todos);
+    return todos.Count == 0
+        ? Results.NotFound()
+        : Results.Ok(todos.Select(t => new TodoGetDto(t.Id, t.Title, t.IsCompleted)));
 });
 
-todoGroup.MapPost("/", async (AppDbContext db, TodoPostDto dto) =>
+todoGroup.MapPost("/", async (AddDbContext db, TodoPostDto dto) =>
 {
-    // read the last id from the database
-    var lastTodo = await db.Todos.OrderBydescending(t => t.Id).FirstOrDefaultAsync();
-    var nextId = LastTodo is null ? 1 : lastTodo.Id + 1;
-
     var todo = new TodoItem
-    (
-        Id = nextId,
+    {
         Title = dto.Title,
         IsCompleted = false,
-        CreatedAt = DataTime.UtcNow
-    );
+        CreatedAt = DateTime.UtcNow
+    };
+
     db.Todos.Add(todo);
-    await db.SavechangesAsync();
+    await db.SaveChangesAsync();
 
     var todoGetDto = new TodoGetDto(todo.Id, todo.Title, todo.IsCompleted);
 
-    return Results.Created($"/{todo.Id}", todoGetDto);
+    return Results.Created($"/api/todos/{todo.Id}", todoGetDto);
 });
 
 #endregion
+
 app.Run();
